@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Shield, ShieldCheck, ShieldX, ExternalLink, RefreshCw, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { API_BASE } from "../config";
 
 interface AppStatus {
   auth_method: string;
@@ -28,7 +29,7 @@ export function GitHubAppStatus() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/github-app/status");
+      const res = await fetch(`${API_BASE}/api/v1/github-app/status`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStatus(data);
@@ -56,8 +57,8 @@ export function GitHubAppStatus() {
   const handleInstall = () => {
     const repo = installRepo.trim();
     const url = repo
-      ? `/api/v1/github-app/install?repo=${encodeURIComponent(repo)}`
-      : `/api/v1/github-app/install`;
+      ? `${API_BASE}/api/v1/github-app/install?repo=${encodeURIComponent(repo)}`
+      : `${API_BASE}/api/v1/github-app/install`;
     window.open(url, "_blank");
   };
 

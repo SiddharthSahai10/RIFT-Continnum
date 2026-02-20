@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAgentStore } from "../store/useAgentStore";
+import { getWsUrl } from "../config";
 
 /**
  * Connects to the pipeline WebSocket for a given run_id and dispatches
@@ -13,10 +14,8 @@ export function useWebSocket(runId: string | null) {
   const connect = useCallback(() => {
     if (!runId) return;
 
-    /* Determine WS URL — respects Vite proxy in dev */
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const host = window.location.host;
-    const url = `${proto}://${host}/ws/${runId}`;
+    /* Determine WS URL — uses VITE_API_URL in production, Vite proxy in dev */
+    const url = getWsUrl(`/ws/${runId}`);
 
     const socket = new WebSocket(url);
     ws.current = socket;

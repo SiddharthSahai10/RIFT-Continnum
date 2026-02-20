@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAgentStore } from "../store/useAgentStore";
+import { API_BASE } from "../config";
 import {
   GitBranch,
   Play,
@@ -86,7 +87,7 @@ export function InputSection() {
     try {
       const freshParam = fresh ? "&fresh=true" : "";
       const res = await fetch(
-        `/api/v1/github-app/check-repo?repo=${encodeURIComponent(url.trim())}${freshParam}`
+        `${API_BASE}/api/v1/github-app/check-repo?repo=${encodeURIComponent(url.trim())}${freshParam}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Unknown error" }));

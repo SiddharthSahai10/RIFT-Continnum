@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { API_BASE } from "../config";
 import type {
   BugType,
   Fix,
@@ -120,7 +121,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     set({ ...INITIAL, status: "running", currentStep: "cloning" });
 
     try {
-      const res = await fetch("/api/v1/run-agent", {
+      const res = await fetch(`${API_BASE}/api/v1/run-agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
