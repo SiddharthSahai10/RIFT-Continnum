@@ -81,8 +81,8 @@ def build_results_json(
         "iterations_used": iterations_used,
         "max_iterations": max_iterations,
         "final_status": final_status,
-        "total_time": round(total_time_seconds, 2),
-        "total_time_formatted": _format_duration(total_time_seconds),
+        "total_time": _format_duration_human(total_time_seconds),
+        "total_time_seconds": round(total_time_seconds, 2),
         "score": score,
         "fixes": fixes,
         "timeline": timeline or [],
@@ -131,3 +131,14 @@ def _format_duration(seconds: float) -> str:
         h, m = divmod(m, 60)
         return f"{h}:{m:02d}:{s:02d}"
     return f"{m}:{s:02d}"
+
+
+def _format_duration_human(seconds: float) -> str:
+    """Format seconds into human-readable like '2m 45s'."""
+    m, s = divmod(int(seconds), 60)
+    if m >= 60:
+        h, m = divmod(m, 60)
+        return f"{h}h {m}m {s}s"
+    if m > 0:
+        return f"{m}m {s}s"
+    return f"{s}s"

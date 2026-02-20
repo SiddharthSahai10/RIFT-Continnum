@@ -116,6 +116,20 @@ async def get_run_result(run_id: str):
     )
 
 
+@router.get("/run-agent/{run_id}/results.json")
+async def get_run_results_json(run_id: str):
+    """Return the results.json for a pipeline run (matches hackathon spec)."""
+    entry = _active_runs.get(run_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    results = entry.get("results")
+    if not results:
+        raise HTTPException(status_code=202, detail="Run still in progress")
+
+    return results
+
+
 @router.get("/runs")
 async def list_runs():
     """List all active / completed pipeline runs."""

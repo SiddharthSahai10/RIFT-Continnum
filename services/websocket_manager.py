@@ -206,17 +206,16 @@ class ConnectionManager:
     async def send_result(self, run_id: str, results: Dict[str, Any]) -> None:
         """Broadcast the final results.json payload.
 
-        Flattens the nested ``score`` object so the frontend can read
-        ``data.score`` (number), ``data.speed_bonus``, ``data.efficiency_penalty``
-        directly.  Also maps ``final_status`` → ``status`` (lowercase).
+        Sends the COMPLETE results.json so the frontend can display it.
+        Also flattens the ``score`` object for backward-compatible fields.
         """
         score_obj = results.get("score", {})
         flat: Dict[str, Any] = {
             **results,
             # Map final_status → status (frontend RunStatus: idle|running|passed|failed)
             "status": results.get("final_status", "FAILED").lower(),
-            # Flatten score object into top-level data fields
-            "score": score_obj.get("final", 0) if isinstance(score_obj, dict) else score_obj,
+            # Flatten score for backward-compat top-level fields
+            "score": score_obj,  # Keep full object — frontend reconstructs it
             "speed_bonus": score_obj.get("speed_bonus", 0) if isinstance(score_obj, dict) else 0,
             "efficiency_penalty": score_obj.get("efficiency_penalty", 0) if isinstance(score_obj, dict) else 0,
         }

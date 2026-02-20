@@ -290,10 +290,27 @@ async def run_tests_node(state: PipelineState) -> dict:
             output = str(exc)
             passed = False
 
+    # Parse test counts from output (Jest: "Tests: 3 failed, 8 passed, 11 total")
+    tests_run = tests_passed = tests_failed = 0
+    for line in output.splitlines():
+        line_s = line.strip()
+        if line_s.startswith("Tests:") and "total" in line_s:
+            import re as _re
+            _m_passed = _re.search(r'(\d+)\s+passed', line_s)
+            _m_failed = _re.search(r'(\d+)\s+failed', line_s)
+            _m_total = _re.search(r'(\d+)\s+total', line_s)
+            if _m_passed:
+                tests_passed = int(_m_passed.group(1))
+            if _m_failed:
+                tests_failed = int(_m_failed.group(1))
+            if _m_total:
+                tests_run = int(_m_total.group(1))
+            break
+
     await ws.send_step_update(run_id, "running_tests", "completed", {"passed": passed})
     _add_timeline(state, "TESTS_RUN", {"iteration": iteration, "passed": passed})
 
-    return {"test_output": output, "all_passed": passed}
+    return {"test_output": output, "all_passed": passed, "tests_run": tests_run, "tests_passed": tests_passed, "tests_failed": tests_failed}
 
 
 async def analyze_failures_node(state: PipelineState) -> dict:
@@ -492,9 +509,13 @@ async def verify_node(state: PipelineState) -> dict:
 
     remaining = 0 if passed else len(state.get("failures", []))
     fixes_applied = sum(1 for f in state.get("fixes", []) if f.get("status") in ("applied", "fixed"))
+    _tests_run = result.get("tests_run", 0)
+    _tests_passed = result.get("tests_passed", 0)
+    _tests_failed = result.get("tests_failed", 0)
     await ws.send_iteration(
         run_id, iteration, state.get("max_retries", 5), passed, remaining,
-        tests_failed=remaining, fixes_applied=fixes_applied,
+        tests_run=_tests_run, tests_passed=_tests_passed,
+        tests_failed=_tests_failed, fixes_applied=fixes_applied,
     )
     _add_timeline(state, "VERIFICATION", {"iteration": iteration, "passed": passed})
 
@@ -630,8 +651,8 @@ async def generate_results_node(state: PipelineState) -> dict:
             "file": f["file"],
             "bug_type": f["bug_type"],
             "line_number": f["line_number"],
-            "commit_message": f["commit_message"],
-            "status": f["status"],
+            "commit_message": f.get("commit_message", "").replace("[NeverDown-AI]", "[AI-AGENT]"),
+            "status": "Fixed" if f.get("status") in ("fixed", "applied") else "Failed",
         } for f in fixes],
         timeline=state.get("timeline", []),
     )

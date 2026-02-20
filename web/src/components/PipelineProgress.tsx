@@ -29,7 +29,7 @@ const STEPS: { key: PipelineStep; label: string; icon: React.ReactNode }[] = [
 
 function stepIndex(step: PipelineStep): number {
   if (step === "completed") return STEPS.length;
-  if (step === "failed") return -1;
+  if (step === "failed") return STEPS.length; // mark all steps as done even on failure
   const idx = STEPS.findIndex((s) => s.key === step);
   return idx >= 0 ? idx : 0; // graceful fallback for unknown steps
 }
@@ -54,15 +54,15 @@ export function PipelineProgress() {
             In Progress
           </span>
         )}
-        {status === "passed" && <span className="badge-success ml-auto">✓ Complete</span>}
-        {status === "failed" && <span className="badge-danger ml-auto">✗ Failed</span>}
+        {status === "passed" && <span className="badge-success ml-auto">✓ All Passed</span>}
+        {status === "failed" && <span className="badge-danger ml-auto">⚠ Partial Fix</span>}
       </div>
 
       {/* Progress bar */}
       <div className="relative mb-8 h-2 rounded-full bg-zinc-800/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
         <motion.div
           className={`absolute inset-y-0 left-0 rounded-full ${status === "failed"
-              ? "bg-gradient-to-r from-red-600 to-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+              ? "bg-gradient-to-r from-amber-600 to-orange-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
               : "bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
             }`}
           initial={{ width: "0%" }}
@@ -81,9 +81,10 @@ export function PipelineProgress() {
       {/* Step indicators */}
       <div className="grid grid-cols-10 gap-1">
         {STEPS.map((step, i) => {
-          const isDone = activeIdx > i || status === "passed";
+          const isCompleted = status === "passed" || status === "failed";
+          const isDone = activeIdx > i || isCompleted;
           const isActive = activeIdx === i && status === "running";
-          const isFailed = status === "failed" && activeIdx === i;
+          const isFailed = false; // individual steps don't fail, the pipeline outcome does;
 
           return (
             <div key={step.key} className="flex flex-col items-center gap-2">

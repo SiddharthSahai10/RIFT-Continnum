@@ -11,7 +11,9 @@ import { CICDTimeline } from "./components/CICDTimeline";
 import { FailureHeatmap } from "./components/FailureHeatmap";
 import { RootCauseCard } from "./components/RootCauseCard";
 import { DiffViewer } from "./components/DiffViewer";
+import { ResultsJSON } from "./components/ResultsJSON";
 import { GitHubAppStatus } from "./components/GitHubAppStatus";
+import { TargetRepoBanner } from "./components/TargetRepoBanner";
 
 export default function App() {
   const runId = useAgentStore((s) => s.runId);
@@ -30,7 +32,8 @@ export default function App() {
       {/* ── GitHub App Auth Status ── */}
       <GitHubAppStatus />
 
-      {/* ── Pipeline Progress Bar ── */}
+      {/* ── Target Repo Banner + Pipeline Progress ── */}
+      {isActive && <TargetRepoBanner />}
       {isActive && <PipelineProgress />}
 
       {/* ── Main Dashboard Grid ── */}
@@ -40,6 +43,7 @@ export default function App() {
           <div className="space-y-5 lg:col-span-8">
             <RunSummary />
             <FixesTable />
+            <ResultsJSON />
             <DiffViewer />
             <CICDTimeline />
           </div>

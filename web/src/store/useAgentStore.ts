@@ -47,6 +47,9 @@ interface AgentState {
   confidence: number;
   testFramework: string;
 
+  /* Final results.json payload */
+  resultsJson: Record<string, unknown> | null;
+
   /* Actions */
   setField: <K extends keyof AgentState>(key: K, value: AgentState[K]) => void;
   startRun: () => Promise<void>;
@@ -78,6 +81,7 @@ const INITIAL: Pick<
   | "currentFile"
   | "confidence"
   | "testFramework"
+  | "resultsJson"
 > = {
   runId: null,
   wsUrl: null,
@@ -101,6 +105,7 @@ const INITIAL: Pick<
   currentFile: "",
   confidence: 0,
   testFramework: "",
+  resultsJson: null,
 };
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -273,17 +278,51 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       }
 
       case "result": {
+        /* Build the canonical results.json object from the WS data */
+        const resultsPayload: Record<string, unknown> = {
+          repository: data.repository ?? state.repositoryUrl,
+          team_name: data.team_name ?? state.teamName,
+          leader_name: data.leader_name ?? state.leaderName,
+          branch_name: (data.branch_name as string) ?? state.branchName,
+          total_failures: data.total_failures ?? state.totalFailures,
+          total_fixes: data.total_fixes ?? state.totalFixes,
+          iterations_used: data.iterations_used ?? state.iteration,
+          max_iterations: data.max_iterations ?? state.maxRetries,
+          final_status: data.final_status ?? ((data.status as string)?.toUpperCase() ?? "FAILED"),
+          total_time: data.total_time ?? 0,
+          total_time_formatted: data.total_time_formatted ?? "",
+          score: data.score != null && typeof data.score === "object"
+            ? data.score
+            : { base: 100, speed_bonus: data.speed_bonus ?? 0, efficiency_penalty: data.efficiency_penalty ?? 0, total_commits: 1, final: data.score ?? 0 },
+          fixes: data.fixes ?? state.fixes.map((f) => ({
+            file: f.file,
+            bug_type: f.bugType,
+            line_number: f.line,
+            commit_message: f.commitMessage,
+            status: f.status,
+          })),
+          timeline: data.timeline ?? [],
+          generated_at: data.generated_at ?? new Date().toISOString(),
+        };
+
+        const scoreVal = typeof data.score === "number" ? data.score : (typeof data.score === "object" && data.score ? (data.score as Record<string, unknown>).final as number : 0);
+
+        // total_time can be string ("6m 49s") or number (409.64) — store seconds for display
+        const rawTime = data.total_time_seconds ?? data.total_time;
+        const totalTimeSecs = typeof rawTime === "number" ? rawTime : 0;
+
         set({
           status: (data.status as RunStatus) ?? "passed",
           currentStep: "completed",
           totalFailures: (data.total_failures as number) ?? state.totalFailures,
           totalFixes: (data.total_fixes as number) ?? state.totalFixes,
-          totalTime: (data.total_time as number) ?? 0,
-          score: (data.score as number) ?? 0,
+          totalTime: totalTimeSecs,
+          score: scoreVal ?? 0,
           speedBonus: (data.speed_bonus as number) ?? 0,
           efficiencyPenalty: (data.efficiency_penalty as number) ?? 0,
           branchName: (data.branch_name as string) ?? state.branchName,
-          logs: [...state.logs, `✅ Pipeline complete — Score: ${data.score}`],
+          resultsJson: resultsPayload,
+          logs: [...state.logs, `✅ Pipeline complete — Score: ${scoreVal}`],
         });
         break;
       }

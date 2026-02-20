@@ -28,7 +28,7 @@ export function RunSummary() {
     idle: { label: "Idle", cls: "badge-neutral" },
     running: { label: "Running", cls: "badge-warning" },
     passed: { label: "All Tests Passed", cls: "badge-success" },
-    failed: { label: "Failed", cls: "badge-danger" },
+    failed: { label: totalFixes > 0 ? "Partial Fix" : "Failed", cls: totalFixes > 0 ? "badge-warning" : "badge-danger" },
   }[status];
 
   const repoName = repositoryUrl.split("/").slice(-2).join("/").replace(".git", "");
@@ -48,12 +48,21 @@ export function RunSummary() {
 
       {/* Meta grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetaItem
-          icon={<ExternalLink size={13} />}
-          label="Repository"
-          value={repoName || "—"}
-          mono
-        />
+        <div>
+          <p className="flex items-center gap-1 text-[10px] font-medium uppercase text-zinc-500">
+            <ExternalLink size={13} /> Target Repository
+          </p>
+          <a
+            href={repositoryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={repositoryUrl}
+            className="mt-0.5 flex items-center gap-1 truncate font-mono text-[11px] text-cyan-400 hover:text-cyan-300 hover:underline transition-colors"
+          >
+            {repoName || "—"}
+            <ExternalLink size={10} className="shrink-0 opacity-50" />
+          </a>
+        </div>
         <MetaItem
           icon={<GitBranch size={13} />}
           label="Branch"
