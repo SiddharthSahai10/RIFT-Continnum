@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from sqlalchemy import MetaData, event
+from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -44,17 +44,18 @@ def get_engine() -> AsyncEngine:
         
         _engine = create_async_engine(
             settings.DATABASE_URL,
-            pool_size=settings.DATABASE_POOL_SIZE,
-            max_overflow=settings.DATABASE_MAX_OVERFLOW,
             echo=settings.DEBUG,
             future=True,
+            pool_size=settings.DATABASE_POOL_SIZE,
+            max_overflow=settings.DATABASE_MAX_OVERFLOW,
+            pool_pre_ping=True,          # Detect stale Neon connections
+            pool_recycle=300,             # Recycle connections every 5 min
+            connect_args={
+                "server_settings": {
+                    "application_name": "NeverDown",
+                },
+            },
         )
-        
-        # Log connection events in debug mode
-        if settings.DEBUG:
-            @event.listens_for(_engine.sync_engine, "connect")
-            def on_connect(dbapi_conn, connection_record):
-                print(f"[DB] New connection established")
     
     return _engine
 
@@ -115,6 +116,9 @@ async def init_db() -> None:
     Creates all tables defined in ORM models.
     Should only be called during initial setup or testing.
     """
+    # Import models to ensure they are registered with Base.metadata
+    import database.models  # noqa: F401
+    
     engine = get_engine()
     
     async with engine.begin() as conn:
@@ -155,7 +159,7 @@ async def check_db_connection() -> bool:
     try:
         engine = get_engine()
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False

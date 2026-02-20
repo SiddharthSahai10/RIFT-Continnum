@@ -22,16 +22,7 @@ class AuditRepository:
         event_data: Dict[str, Any],
         incident_id: Optional[UUID] = None,
     ) -> UUID:
-        """Log an audit event.
-        
-        Args:
-            event_type: Type of event (e.g., 'state_transition', 'agent_execution')
-            event_data: Event details as dictionary
-            incident_id: Optional related incident ID
-            
-        Returns:
-            ID of the created audit log entry
-        """
+        """Log an audit event."""
         log_entry = AuditLogORM(
             id=uuid4(),
             incident_id=incident_id,

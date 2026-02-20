@@ -243,7 +243,7 @@ class IncidentRepository:
             
         return {
             "id": str(v.id),
-            "status": v.status.value,
+            "status": v.status.value if hasattr(v.status, 'value') else str(v.status),
             "tests_passed": v.tests_passed,
             "tests_failed": v.tests_failed,
             "tests_skipped": v.tests_skipped,
@@ -328,4 +328,3 @@ class IncidentRepository:
         result = await self.session.execute(stmt)
         patch = result.scalar_one_or_none()
         return patch.diff if patch else None
-

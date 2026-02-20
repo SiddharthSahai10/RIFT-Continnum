@@ -37,13 +37,20 @@ class Settings(BaseSettings):
     # Redis (for task queue)
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    # GitHub
+    # GitHub (PAT fallback)
     GITHUB_TOKEN: Optional[SecretStr] = None
-    GITHUB_APP_ID: Optional[str] = None
-    GITHUB_APP_PRIVATE_KEY: Optional[SecretStr] = None
     GITHUB_WEBHOOK_SECRET: Optional[SecretStr] = None
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[SecretStr] = None
+    
+    # GitHub App (primary auth — developer-owned)
+    GITHUB_APP_ID: Optional[str] = None
+    GITHUB_APP_PRIVATE_KEY: Optional[SecretStr] = None
+    GITHUB_APP_PRIVATE_KEY_PATH: Optional[str] = None  # Alternative to inline key
+    GITHUB_APP_SLUG: Optional[str] = None  # App slug for install URL
+    GITHUB_APP_CLIENT_ID: Optional[str] = None
+    GITHUB_APP_CLIENT_SECRET: Optional[SecretStr] = None
+    GITHUB_APP_WEBHOOK_URL: Optional[str] = None  # Callback URL after install
     
     # LLM Configuration
     LLM_PROVIDER: str = "anthropic"  # or "openai"
@@ -54,7 +61,10 @@ class Settings(BaseSettings):
     
     # Docker / Sandbox
     DOCKER_HOST: Optional[str] = None
-    SANDBOX_IMAGE: str = "python:3.11-slim"
+    SANDBOX_IMAGE: str = "python:3.11-slim"  # Default; overridden per-framework
+    SANDBOX_IMAGE_NODE: str = "node:18-slim"
+    SANDBOX_IMAGE_GO: str = "golang:1.21-bookworm"
+    SANDBOX_IMAGE_RUST: str = "rust:1.74-slim-bookworm"
     SANDBOX_TIMEOUT: int = 300
     SANDBOX_TIMEOUT_SECONDS: int = 600
     SANDBOX_MEMORY_LIMIT: str = "512m"
@@ -65,8 +75,11 @@ class Settings(BaseSettings):
     SANITIZER_CONFIDENCE_THRESHOLD: float = 0.9
     SANITIZER_MAX_SECRETS: int = 100
     REASONER_CONFIDENCE_THRESHOLD: float = 0.7
-    MAX_RETRIES: int = 3
+    MAX_RETRIES: int = 5
     RETRY_BACKOFF_BASE: float = 2.0
+    
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:5173"
     
     # Security
     ALLOWED_REPOS: List[str] = Field(default_factory=list)
@@ -76,6 +89,7 @@ class Settings(BaseSettings):
     WORKSPACE_DIR: str = "/tmp/neverdown-workspaces"
     SANITIZED_REPO_DIR: str = "/tmp/neverdown-sanitized"
     CLONE_DIR: str = "/tmp/neverdown-clones"
+    RESULTS_DIR: str = "/tmp/neverdown-results"
     
     @field_validator("ALLOWED_REPOS", mode="before")
     @classmethod

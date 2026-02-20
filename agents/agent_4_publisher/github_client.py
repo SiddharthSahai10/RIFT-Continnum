@@ -38,6 +38,10 @@ class GitHubClient:
     
     IMPORTANT: This client is for creating PRs ONLY.
     It NEVER auto-merges PRs (human-in-the-loop requirement).
+    
+    Token priority:
+    1. Explicitly passed token (e.g. GitHub App Installation Token)
+    2. PAT from .env (fallback)
     """
     
     BASE_URL = "https://api.github.com"
@@ -46,7 +50,7 @@ class GitHubClient:
         """Initialize with GitHub token.
         
         Args:
-            token: GitHub personal access token
+            token: GitHub token (App Installation Token ya PAT)
         """
         self.settings = get_settings()
         
@@ -56,6 +60,14 @@ class GitHubClient:
             self._token = self.settings.GITHUB_TOKEN.get_secret_value()
         else:
             self._token = None
+    
+    def update_token(self, token: str) -> None:
+        """Token dynamically update karo (GitHub App token inject karne ke liye).
+        
+        Jab GitHubAppService se naya Installation Access Token milta hai,
+        toh isse update kar sakte hain bina naya client banaye.
+        """
+        self._token = token
     
     @property
     def headers(self) -> Dict[str, str]:

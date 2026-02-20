@@ -1,5 +1,6 @@
 """Reasoner agent - LLM-powered root cause analysis for NeverDown."""
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -232,7 +233,7 @@ class ReasonerAgent(BaseAgent[ReasonerInput, ReasonerOutputData]):
         system_prompt: str,
         user_prompt: str,
     ) -> Dict[str, Any]:
-        """Call Anthropic Claude API."""
+        """Call Anthropic Claude API with retry on rate-limit (429)."""
         url = "https://api.anthropic.com/v1/messages"
         
         headers = {
@@ -251,30 +252,49 @@ class ReasonerAgent(BaseAgent[ReasonerInput, ReasonerOutputData]):
             ],
         }
         
+        max_retries = 5
+        base_delay = 15.0  # 15 seconds base delay for 5 req/min limit
+
         async with httpx.AsyncClient(timeout=120.0) as client:
-            try:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
+            for attempt in range(max_retries + 1):
+                try:
+                    response = await client.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    content = ""
+                    if data.get("content"):
+                        for block in data["content"]:
+                            if block.get("type") == "text":
+                                content += block.get("text", "")
+                    
+                    return {
+                        "content": content,
+                        "usage": {
+                            "input_tokens": data.get("usage", {}).get("input_tokens", 0),
+                            "output_tokens": data.get("usage", {}).get("output_tokens", 0),
+                        },
+                    }
                 
-                content = ""
-                if data.get("content"):
-                    for block in data["content"]:
-                        if block.get("type") == "text":
-                            content += block.get("text", "")
-                
-                return {
-                    "content": content,
-                    "usage": {
-                        "input_tokens": data.get("usage", {}).get("input_tokens", 0),
-                        "output_tokens": data.get("usage", {}).get("output_tokens", 0),
-                    },
-                }
-            
-            except httpx.HTTPStatusError as e:
-                raise LLMError(f"Anthropic API error: {e.response.text}", "anthropic")
-            except Exception as e:
-                raise LLMError(f"Anthropic API call failed: {str(e)}", "anthropic")
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429 and attempt < max_retries:
+                        # Rate-limited — use retry-after header or exponential backoff
+                        retry_after = e.response.headers.get("retry-after")
+                        if retry_after:
+                            delay = float(retry_after)
+                        else:
+                            delay = base_delay * (2 ** attempt)
+                        logger.warning(
+                            "Rate limited by Anthropic, retrying",
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            delay_seconds=delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise LLMError(f"Anthropic API error: {e.response.text}", "anthropic")
+                except Exception as e:
+                    raise LLMError(f"Anthropic API call failed: {str(e)}", "anthropic")
     
     async def _call_openai(
         self,

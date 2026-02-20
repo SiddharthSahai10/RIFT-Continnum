@@ -91,5 +91,13 @@ docker-compose.override.yml
 Thumbs.db
 .DS_Store
 
+# Node / Frontend
+node_modules/
+web/dist/
+
 # Logs
 *.txt
+
+# GitHub App private key — NEVER commit this
+*.pem
+neverdown-app.pem

@@ -160,7 +160,7 @@ class SandboxRunner:
             "--network", self.config.network_mode,  # No network
             "--memory", self.config.memory_limit,
             f"--cpus={self.config.cpu_limit}",
-            "--pids-limit", "100",  # Limit processes
+            "--pids-limit", "256",  # Limit processes (react-scripts needs more than 100)
             "-v", f"{repo_path}:{self.config.work_dir}:rw",
             "-w", self.config.work_dir,
         ]
@@ -174,9 +174,10 @@ class SandboxRunner:
                 cmd.extend(["-e", f"{key}={value}"])
         
         # Add security options
+        # NOTE: Do NOT use --cap-drop ALL — it prevents npm from creating
+        # symlinks in node_modules/.bin which breaks npx/react-scripts.
         cmd.extend([
             "--security-opt", "no-new-privileges",
-            "--cap-drop", "ALL",  # Drop all capabilities
         ])
         
         # Add image and command

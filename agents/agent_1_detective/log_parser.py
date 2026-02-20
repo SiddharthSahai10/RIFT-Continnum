@@ -85,11 +85,23 @@ class LogParser:
         
         # Try JavaScript stack trace
         js_errors = self._parse_js_stack(log_content)
-        
-        # Prefer the parser that found file paths
-        if python_errors and any(e.file_path for e in python_errors):
+
+        # Try Jest/Vitest/Mocha test-runner output
+        jest_errors = self._parse_jest_test_output(log_content)
+
+        # ── Priority: Jest parser FIRST if it found ● blocks ─────
+        # Jest output contains generic "Error:" lines that _parse_js_stack
+        # picks up, but those typically point to node_modules.  The Jest
+        # parser extracts the actual test names, user-code file paths,
+        # and assertion messages, so it's strictly more useful.
+        if jest_errors:
+            errors.extend(jest_errors)
+        elif python_errors and any(e.file_path for e in python_errors):
             errors.extend(python_errors)
-        elif js_errors and any(e.file_path for e in js_errors):
+        elif js_errors and any(
+            e.file_path and 'node_modules' not in (e.file_path or '')
+            for e in js_errors
+        ):
             errors.extend(js_errors)
         elif python_errors:
             errors.extend(python_errors)
@@ -200,6 +212,121 @@ class LogParser:
         
         return errors
     
+    def _parse_jest_test_output(self, content: str) -> List[ErrorInfo]:
+        """Parse Jest / Vitest / Mocha test runner output.
+
+        Handles patterns like:
+          FAIL src/App.test.js
+          ● test name
+            expect(...).toBeInTheDocument()
+          ● Test suite failed to run
+            SyntaxError: ...
+          ✕ test name (mocha)
+          Tests:  2 failed, 3 passed, 5 total
+        """
+        errors: List[ErrorInfo] = []
+
+        # 1. FAIL <file> lines
+        fail_files = re.findall(r'FAIL\s+(\S+)', content)
+
+        # 2. ● blocks (Jest / Vitest)
+        blocks = re.split(r'●\s+', content)
+        for block in blocks[1:]:
+            lines = block.strip().splitlines()
+            test_name = lines[0].strip() if lines else "unknown test"
+
+            # Find file:line from stack frame  (src/App.test.js:10:5)
+            loc = re.search(r'\(([^:)]+):(\d+):\d+\)', block)
+            if loc:
+                file_path = loc.group(1).lstrip('/')
+                # Strip Docker mount point prefixes
+                file_path = re.sub(r'^(?:workspace|app)/', '', file_path)
+                if 'node_modules' not in file_path:
+                    line_number = int(loc.group(2))
+                else:
+                    file_path = fail_files[0] if fail_files else None
+                    line_number = None
+            else:
+                file_path = fail_files[0] if fail_files else None
+                line_number = None
+
+            # Try to extract file:line from SyntaxError message
+            # e.g. "SyntaxError: /workspace/src/App.test.js: Support for ... (6:10):"
+            if line_number is None:
+                syntax_loc = re.search(
+                    r'SyntaxError:\s*(/?\S+\.(?:js|jsx|ts|tsx))\S*.*?\((\d+):\d+\)',
+                    block,
+                )
+                if syntax_loc:
+                    candidate = syntax_loc.group(1)
+                    # Strip Docker workspace/app prefix and leading slashes
+                    candidate = re.sub(r'^/?(?:workspace|app)/', '', candidate)
+                    candidate = candidate.lstrip('/')
+                    if 'node_modules' not in candidate:
+                        file_path = candidate
+                        line_number = int(syntax_loc.group(2))
+
+                # Also try: "file.test.js:1"
+                if line_number is None:
+                    inline_loc = re.search(
+                        r'(?:/workspace/)?(\S+\.(?:js|jsx|ts|tsx)):(\d+)',
+                        block,
+                    )
+                    if inline_loc and 'node_modules' not in inline_loc.group(1):
+                        file_path = re.sub(r'^/?(?:workspace|app)/', '', inline_loc.group(1)).lstrip('/')
+                        line_number = int(inline_loc.group(2))
+
+            # Extract assertion message
+            msg_parts = [test_name]
+            expect_match = re.search(
+                r'(expect\(.+?\)\.[\w.]+\(.*?\)|Expected .+?Received .+)',
+                block, re.DOTALL,
+            )
+            if expect_match:
+                msg_parts.append(expect_match.group(1).replace('\n', ' ')[:200])
+
+            # Also capture "TestingLibraryElementError: Unable to find..." messages
+            tl_err = re.search(
+                r'(TestingLibraryElementError:\s*.+?)(?:\n\n|\Z)',
+                block, re.DOTALL,
+            )
+            if tl_err:
+                msg_parts.append(tl_err.group(1).replace('\n', ' ')[:200])
+
+            message = ' — '.join(msg_parts)
+
+            errors.append(ErrorInfo(
+                error_type="TestFailure",
+                message=message[:500],
+                file_path=file_path,
+                line_number=line_number,
+                stack_trace=block[:800],
+            ))
+
+        # 3. If no ● blocks but FAIL files exist → compilation / import errors
+        if not errors and fail_files:
+            for fpath in fail_files:
+                errors.append(ErrorInfo(
+                    error_type="TestSuiteFailure",
+                    message=f"Test suite failed to run: {fpath}",
+                    file_path=fpath,
+                    line_number=None,
+                    stack_trace=None,
+                ))
+
+        # 4. ✕ markers (Mocha style)
+        if not errors:
+            mocha_fails = re.findall(r'^\s+\d+\)\s+(.+)$', content, re.MULTILINE)
+            for test_name in mocha_fails:
+                errors.append(ErrorInfo(
+                    error_type="TestFailure",
+                    message=test_name.strip()[:300],
+                    file_path=None,
+                    line_number=None,
+                ))
+
+        return errors
+
     def _parse_generic_errors(self, content: str) -> List[ErrorInfo]:
         """Parse generic error patterns."""
         errors: List[ErrorInfo] = []

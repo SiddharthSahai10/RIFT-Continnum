@@ -129,22 +129,120 @@ class GitService:
                 error=f"Clone error: {str(e)}",
             )
     
-    def _prepare_clone_url(self, url: str) -> str:
-        """Prepare clone URL with authentication if needed."""
-        if not self.settings.GITHUB_TOKEN:
-            return url
+    def _prepare_clone_url(self, url: str, token: Optional[str] = None) -> str:
+        """Prepare clone URL with authentication if needed.
         
-        token = self.settings.GITHUB_TOKEN.get_secret_value()
-        
-        # Handle HTTPS URLs
-        if url.startswith("https://github.com/"):
-            # Insert token into URL
+        Args:
+            url: Repo URL
+            token: Optional explicit token (e.g., from GitHub App).
+                   If not provided, falls back to PAT from settings.
+        """
+        # Explicit token (GitHub App ya manual)
+        if token and url.startswith("https://github.com/"):
             return url.replace(
                 "https://github.com/",
                 f"https://x-access-token:{token}@github.com/",
             )
         
+        # PAT fallback
+        if not token and self.settings.GITHUB_TOKEN:
+            pat = self.settings.GITHUB_TOKEN.get_secret_value()
+            if url.startswith("https://github.com/"):
+                return url.replace(
+                    "https://github.com/",
+                    f"https://x-access-token:{pat}@github.com/",
+                )
+        
         return url
+    
+    async def clone_with_smart_auth(
+        self,
+        repo_url: str,
+        incident_id: str,
+        branch: Optional[str] = None,
+        depth: int = 0,
+    ) -> CloneResult:
+        """Smart clone — GitHub App token pehle try karta hai, phir PAT.
+        
+        Yeh method GitHubAppService use karta hai best token find karne ke liye.
+        Agar GitHub App installed hai repo pe → App token use hoga.
+        Warna PAT fallback mein use hoga.
+        
+        Args:
+            repo_url: GitHub HTTPS URL
+            incident_id: Clone directory naming ke liye
+            branch: Optional branch
+            depth: Clone depth (0 = full)
+            
+        Returns:
+            CloneResult with auth_method info
+        """
+        import re
+        
+        # Parse owner/repo
+        match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', repo_url)
+        if not match:
+            # Fallback to normal clone agar URL parse nahi ho raha
+            return await self.clone_repository(repo_url, incident_id, branch, depth)
+        
+        owner, repo = match.group(1), match.group(2).replace('.git', '')
+        
+        try:
+            from services.github_app_service import get_github_app_service
+            app_svc = get_github_app_service()
+            
+            token, auth_method = await app_svc.get_token_for_repo(owner, repo)
+            
+            logger.info(
+                "Clone using smart auth",
+                repo=f"{owner}/{repo}",
+                auth_method=auth_method,
+            )
+            
+            # Clone with resolved token
+            self.base_clone_dir.mkdir(parents=True, exist_ok=True)
+            clone_path = self.base_clone_dir / f"repo-{incident_id}"
+            
+            if clone_path.exists():
+                shutil.rmtree(clone_path)
+            
+            clone_url = self._prepare_clone_url(repo_url, token=token)
+            
+            cmd = ["git", "clone"]
+            if depth > 0:
+                cmd.extend(["--depth", str(depth)])
+            if branch:
+                cmd.extend(["--branch", branch])
+            cmd.extend([clone_url, str(clone_path)])
+            
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=self._get_git_env(),
+            )
+            
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            
+            if proc.returncode != 0:
+                error_msg = stderr.decode('utf-8', errors='replace')
+                error_msg = self._redact_token(error_msg, extra_token=token)
+                return CloneResult(success=False, error=f"Clone failed ({auth_method}): {error_msg[:500]}")
+            
+            logger.info(
+                "Repository cloned with smart auth",
+                path=str(clone_path),
+                auth_method=auth_method,
+            )
+            
+            return CloneResult(success=True, path=str(clone_path))
+            
+        except Exception as e:
+            logger.warning(
+                "Smart auth clone failed, falling back to standard clone",
+                error=str(e),
+            )
+            return await self.clone_repository(repo_url, incident_id, branch, depth)
     
     def _get_git_env(self) -> dict:
         """Get environment for git commands."""
@@ -155,11 +253,13 @@ class GitService:
         
         return env
     
-    def _redact_token(self, message: str) -> str:
+    def _redact_token(self, message: str, extra_token: Optional[str] = None) -> str:
         """Redact any tokens from error messages."""
         if self.settings.GITHUB_TOKEN:
             token = self.settings.GITHUB_TOKEN.get_secret_value()
             message = message.replace(token, "<REDACTED_TOKEN>")
+        if extra_token:
+            message = message.replace(extra_token, "<REDACTED_TOKEN>")
         return message
     
     def cleanup_clone(self, path: str) -> None:

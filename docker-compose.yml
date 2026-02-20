@@ -1,53 +1,44 @@
-# NeverDown Docker Compose configuration
+# NeverDown Docker Compose — Development Configuration
+# Uses Neon PostgreSQL (cloud), so no local Postgres needed.
 
 services:
-  neverdown:
+  # ── Backend (FastAPI) ──────────────────────────────────────
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - API_KEY=${API_KEY}
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
-      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
-      - LLM_API_KEY=${LLM_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+    env_file:
+      - .env
     volumes:
-      # On macOS Docker Desktop, socket is at ~/.docker/run/docker.sock
-      # On Linux, it's at /var/run/docker.sock
-      # Use the macOS path for this dev environment
-      - ${HOME}/.docker/run/docker.sock:/var/run/docker.sock:ro
-      - clones:/tmp/neverdown/clones
-      - sanitized:/tmp/neverdown/sanitized
-    depends_on:
-      postgres:
-        condition: service_healthy
+      # Mount source code for live reload (dev mode)
+      - .:/app:rw
+      # Docker socket for sandbox (Verifier agent)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # BIND MOUNTS (not named volumes!) so Docker-in-Docker sandbox
+      # containers can mount the same paths from the host.
+      - /tmp/neverdown-clones:/tmp/neverdown-clones
+      - /tmp/neverdown-sanitized:/tmp/neverdown-sanitized
+      - /tmp/neverdown-results:/tmp/neverdown-results
+      - /tmp/neverdown-workspaces:/tmp/neverdown-workspaces
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=neverdown
-      - POSTGRES_PASSWORD=neverdown
-      - POSTGRES_DB=neverdown
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U neverdown"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # ── Frontend (Vite React) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-  clones:
-  sanitized:

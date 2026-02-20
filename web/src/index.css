@@ -1,0 +1,122 @@
+/* ── NeverDown Global Styles ── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #09090b;
+    --color-surface: #111113;
+    --color-panel: #18181b;
+    --color-border: #27272a;
+    --color-primary: #8b5cf6;
+    --color-secondary: #6366f1;
+    --color-accent: #22d3ee;
+    --color-success: #22c55e;
+    --color-warning: #eab308;
+    --color-danger: #ef4444;
+    --color-text: #fafafa;
+    --color-muted: #a1a1aa;
+  }
+
+  body {
+    @apply font-sans;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-zinc-700;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-600;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-xl border border-white/5 bg-white/[0.03] backdrop-blur-xl;
+  }
+  .glass-heavy {
+    @apply rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-2xl;
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.15),
+      0 0 45px rgba(139, 92, 246, 0.05);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-purple-400 via-violet-400 to-indigo-400 bg-clip-text text-transparent;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-success {
+    @apply badge bg-emerald-500/10 text-emerald-400 ring-1 ring-inset ring-emerald-500/20;
+  }
+  .badge-danger {
+    @apply badge bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/20;
+  }
+  .badge-warning {
+    @apply badge bg-yellow-500/10 text-yellow-400 ring-1 ring-inset ring-yellow-500/20;
+  }
+  .badge-info {
+    @apply badge bg-cyan-500/10 text-cyan-400 ring-1 ring-inset ring-cyan-500/20;
+  }
+  .badge-neutral {
+    @apply badge bg-zinc-500/10 text-zinc-400 ring-1 ring-inset ring-zinc-500/20;
+  }
+
+  .card {
+    @apply rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-5 backdrop-blur-sm;
+  }
+
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600
+           px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/20
+           transition-all duration-200 hover:shadow-purple-500/30 hover:brightness-110
+           active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-zinc-700/60 bg-zinc-800/50 px-4 py-2.5 text-sm text-white
+           placeholder-zinc-500 outline-none transition-all duration-200
+           focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20;
+  }
+}
+
+/* Grid background pattern */
+.grid-bg {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Gradient mesh background */
+.mesh-gradient {
+  background: radial-gradient(
+      at 20% 20%,
+      rgba(139, 92, 246, 0.08) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      at 80% 80%,
+      rgba(99, 102, 241, 0.06) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      at 50% 0%,
+      rgba(34, 211, 238, 0.04) 0%,
+      transparent 50%
+    );
+}

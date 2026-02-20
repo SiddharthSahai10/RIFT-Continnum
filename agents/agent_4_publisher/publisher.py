@@ -51,6 +51,10 @@ class PublisherAgent(BaseAgent[PublisherInput, PullRequest]):
     - Open PR (NEVER auto-merge)
     - Add appropriate labels
     
+    Auth Priority:
+    1. GitHub App Installation Token (agar App install hai repo pe)
+    2. PAT fallback (from .env)
+    
     CRITICAL CONSTRAINTS:
     - This agent applies patches to ORIGINAL repo (not sanitized)
     - NEVER auto-merges PRs (human-in-the-loop required)
@@ -63,6 +67,33 @@ class PublisherAgent(BaseAgent[PublisherInput, PullRequest]):
         super().__init__()
         self.settings = get_settings()
         self.github = GitHubClient()
+    
+    async def _resolve_token_for_repo(self, repo_url: str) -> str:
+        """Repo ke liye best available token resolve karo.
+        
+        GitHub App installed hai toh App token milega,
+        warna PAT se kaam chalega.
+        """
+        import re
+        match = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', repo_url)
+        if not match:
+            return self.github._token or ""
+        
+        owner, repo = match.group(1), match.group(2).replace('.git', '')
+        
+        try:
+            from services.github_app_service import get_github_app_service
+            app_svc = get_github_app_service()
+            token, auth_method = await app_svc.get_token_for_repo(owner, repo)
+            self.logger.info(
+                "Publisher using auth",
+                auth_method=auth_method,
+                repo=f"{owner}/{repo}",
+            )
+            return token
+        except Exception as e:
+            self.logger.warning("Smart auth failed for publisher, using default token", error=str(e))
+            return self.github._token or ""
     
     async def execute(
         self,
@@ -95,6 +126,11 @@ class PublisherAgent(BaseAgent[PublisherInput, PullRequest]):
             owner, repo = self.github.parse_repo_url(input_data.repo_url)
         except ValueError as e:
             return AgentResult.fail(str(e))
+        
+        # Smart auth: GitHub App token > PAT fallback
+        resolved_token = await self._resolve_token_for_repo(input_data.repo_url)
+        if resolved_token:
+            self.github.update_token(resolved_token)
         
         # Generate branch name
         branch_name = self._generate_branch_name(incident_id)

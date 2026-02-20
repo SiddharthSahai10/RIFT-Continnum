@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import auth, health, incidents, status, webhooks
+from api.routes import github_app, health, run_agent, ws
 from api.middleware.request_logging import RequestLoggingMiddleware
 from config.logging_config import configure_logging, get_logger
 from config.settings import get_settings
@@ -92,10 +92,11 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(health.router, prefix=settings.API_PREFIX, tags=["Health"])
-    app.include_router(incidents.router, prefix=settings.API_PREFIX, tags=["Incidents"])
-    app.include_router(status.router, prefix=settings.API_PREFIX, tags=["Status"])
-    app.include_router(webhooks.router, prefix=settings.API_PREFIX, tags=["Webhooks"])
-    app.include_router(auth.router, prefix=settings.API_PREFIX + "/auth", tags=["Auth"])
+    app.include_router(github_app.router, prefix=settings.API_PREFIX, tags=["GitHubApp"])
+    app.include_router(run_agent.router, prefix=settings.API_PREFIX, tags=["RunAgent"])
+    
+    # WebSocket (no prefix — mounted at root /ws/{run_id})
+    app.include_router(ws.router, tags=["WebSocket"])
     
     return app
 
